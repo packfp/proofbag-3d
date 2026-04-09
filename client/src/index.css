@@ -1,0 +1,159 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 215 25% 7%;
+  --foreground: 210 20% 90%;
+  --card: 216 24% 10%;
+  --card-foreground: 210 20% 90%;
+  --card-border: 215 20% 18%;
+  --popover: 216 24% 10%;
+  --popover-foreground: 210 20% 90%;
+  --popover-border: 215 20% 18%;
+  --primary: 182 100% 40%;
+  --primary-foreground: 0 0% 0%;
+  --primary-border: hsl(182 100% 30%);
+  --secondary: 215 20% 16%;
+  --secondary-foreground: 210 20% 80%;
+  --secondary-border: hsl(215 20% 22%);
+  --muted: 215 20% 16%;
+  --muted-foreground: 215 15% 55%;
+  --muted-border: hsl(215 20% 20%);
+  --accent: 182 100% 40%;
+  --accent-foreground: 0 0% 0%;
+  --accent-border: hsl(182 100% 30%);
+  --destructive: 0 70% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --destructive-border: hsl(0 70% 40%);
+  --border: 215 20% 18%;
+  --input: 215 20% 14%;
+  --ring: 182 100% 40%;
+  --radius: 0.5rem;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono: 'Courier New', monospace;
+  --sidebar: 216 24% 8%;
+  --sidebar-foreground: 210 20% 85%;
+  --sidebar-border: 215 20% 16%;
+  --sidebar-ring: 182 100% 40%;
+  --sidebar-primary: 182 100% 40%;
+  --sidebar-primary-foreground: 0 0% 0%;
+  --sidebar-primary-border: hsl(182 100% 30%);
+  --sidebar-accent: 215 20% 16%;
+  --sidebar-accent-foreground: 210 20% 80%;
+  --sidebar-accent-border: hsl(215 20% 22%);
+  --chart-1: 182 80% 45%;
+  --chart-2: 220 70% 55%;
+  --chart-3: 280 60% 55%;
+  --chart-4: 40 90% 55%;
+  --chart-5: 0 70% 55%;
+}
+
+* {
+  border-color: hsl(var(--border));
+  box-sizing: border-box;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: hsl(var(--background)); }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+
+.cursor-eyedropper { cursor: crosshair; }
+
+.proof-canvas-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.proof-canvas-container canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+}
+
+.tool-btn:hover:not(:disabled) {
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary));
+}
+
+.tool-btn.active {
+  background: hsl(var(--primary));
+  color: #000;
+  border-color: hsl(var(--primary));
+}
+
+.tool-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: hsl(var(--border));
+  outline: none;
+  width: 100%;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  cursor: pointer;
+}
+
+.step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: hsl(var(--border));
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.step-dot.active {
+  background: hsl(var(--primary));
+  box-shadow: 0 0 6px hsl(var(--primary));
+}
+
+.step-dot.done {
+  background: hsl(182 80% 30%);
+}
