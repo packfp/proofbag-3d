@@ -150,10 +150,18 @@ function computeUVRegions(d: BagDimensions): {
       back: { uMin: (gL + fw + gR) / totalW, uMax: 1, vMin: 0, vMax: 1 },
     };
   } else if (d.proofLayout === 'front-back') {
-    // Layout: [front (left half)][back (right half)]
+    // Layout: [front (left half)][back (right half)] — side by side
     return {
       front: { uMin: 0, uMax: 0.5, vMin: 0, vMax: 1 },
       back: { uMin: 0.5, uMax: 1, vMin: 0, vMax: 1 },
+      leftGusset: null,
+      rightGusset: null,
+    };
+  } else if (d.proofLayout === 'front-back-stacked') {
+    // Layout: [front (top half)] / [back (bottom half)] — stacked vertically
+    return {
+      front: { uMin: 0, uMax: 1, vMin: 0, vMax: 0.5 },
+      back: { uMin: 0, uMax: 1, vMin: 0.5, vMax: 1 },
       leftGusset: null,
       rightGusset: null,
     };

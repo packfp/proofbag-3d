@@ -21,26 +21,39 @@ interface ProofPanelProps {
 
 // ─── Dimension Field ─────────────────────────────────────────────────────────
 
-function DimField({ label, value, onChange, unit = 'mm' }: {
+const MM_PER_INCH = 25.4;
+
+/** Display a dimension field in the user's chosen unit (in or mm). 
+ *  Internal storage is always mm. */
+function DimField({ label, valueMm, onChangeMm, unit }: {
   label: string;
-  value: number;
-  onChange: (v: number) => void;
-  unit?: string;
+  valueMm: number;
+  onChangeMm: (mm: number) => void;
+  unit: 'in' | 'mm';
 }) {
+  const display = unit === 'in'
+    ? Math.round((valueMm / MM_PER_INCH) * 1000) / 1000
+    : Math.round(valueMm * 10) / 10;
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = parseFloat(e.target.value) || 0;
+    onChangeMm(unit === 'in' ? raw * MM_PER_INCH : raw);
+  };
+
   return (
     <div className="flex items-center gap-2">
       <label className="text-xs text-muted-foreground w-36 flex-shrink-0">{label}</label>
       <div className="flex items-center gap-1 flex-1">
         <input
           type="number"
-          value={Math.round(value * 10) / 10}
-          onChange={e => onChange(parseFloat(e.target.value) || 0)}
+          value={display}
+          onChange={handleChange}
           className="w-full bg-card border border-border rounded px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
-          step="0.5"
+          step={unit === 'in' ? '0.125' : '0.5'}
           min="0"
           data-testid={`dim-${label.toLowerCase().replace(/\s+/g, '-')}`}
         />
-        <span className="text-xs text-muted-foreground">{unit}</span>
+        <span className="text-xs text-muted-foreground">{unit === 'in' ? '"' : 'mm'}</span>
       </div>
     </div>
   );
@@ -67,6 +80,7 @@ export default function ProofPanel({
   const [previewMode, setPreviewMode] = useState<'original' | 'masked'>('original');
   const [maskedCanvas, setMaskedCanvas] = useState<HTMLCanvasElement | null>(null);
   const [localDims, setLocalDims] = useState<BagDimensions | null>(null);
+  const [displayUnit, setDisplayUnit] = useState<'in' | 'mm'>('in');
 
   // Sync local dims with parent dims
   useEffect(() => {
@@ -365,6 +379,13 @@ export default function ProofPanel({
             <Ruler size={14} className="text-primary" />
             <h3 className="text-sm font-medium text-foreground">Detected Dimensions</h3>
             <span className="text-xs text-muted-foreground">(adjust if needed)</span>
+            <button
+              className="ml-auto tool-btn text-xs px-2 py-0.5"
+              onClick={() => setDisplayUnit(u => u === 'in' ? 'mm' : 'in')}
+              data-testid="btn-unit-toggle"
+            >
+              {displayUnit === 'in' ? 'in → mm' : 'mm → in'}
+            </button>
           </div>
 
           <div className="bg-card border border-border rounded p-3 flex flex-col gap-2.5">
@@ -379,23 +400,24 @@ export default function ProofPanel({
               >
                 <option value="front-only">Front face only</option>
                 <option value="front-back">Front + Back (side by side)</option>
+                <option value="front-back-stacked">Front + Back (stacked)</option>
                 <option value="full-wrap">Full wrap (all panels)</option>
               </select>
             </div>
 
             <div className="h-px bg-border" />
 
-            <DimField label="Total Width" value={localDims.totalWidth} onChange={v => updateDim('totalWidth', v)} />
-            <DimField label="Total Height" value={localDims.totalHeight} onChange={v => updateDim('totalHeight', v)} />
-            <DimField label="Front Panel Width" value={localDims.frontWidth} onChange={v => updateDim('frontWidth', v)} />
-            <DimField label="Left Gusset" value={localDims.leftGussetWidth} onChange={v => updateDim('leftGussetWidth', v)} />
-            <DimField label="Right Gusset" value={localDims.rightGussetWidth} onChange={v => updateDim('rightGussetWidth', v)} />
+            <DimField label="Total Width" valueMm={localDims.totalWidth} onChangeMm={v => updateDim('totalWidth', v)} unit={displayUnit} />
+            <DimField label="Total Height" valueMm={localDims.totalHeight} onChangeMm={v => updateDim('totalHeight', v)} unit={displayUnit} />
+            <DimField label="Front Panel Width" valueMm={localDims.frontWidth} onChangeMm={v => updateDim('frontWidth', v)} unit={displayUnit} />
+            <DimField label="Left Gusset" valueMm={localDims.leftGussetWidth} onChangeMm={v => updateDim('leftGussetWidth', v)} unit={displayUnit} />
+            <DimField label="Right Gusset" valueMm={localDims.rightGussetWidth} onChangeMm={v => updateDim('rightGussetWidth', v)} unit={displayUnit} />
 
             <div className="h-px bg-border" />
 
-            <DimField label="Top Seal / Closure" value={localDims.topSealHeight} onChange={v => updateDim('topSealHeight', v)} />
-            <DimField label="Bottom Seal" value={localDims.bottomSealHeight} onChange={v => updateDim('bottomSealHeight', v)} />
-            <DimField label="Bag Depth (filled)" value={localDims.bagDepth} onChange={v => updateDim('bagDepth', v)} />
+            <DimField label="Top Seal / Closure" valueMm={localDims.topSealHeight} onChangeMm={v => updateDim('topSealHeight', v)} unit={displayUnit} />
+            <DimField label="Bottom Seal" valueMm={localDims.bottomSealHeight} onChangeMm={v => updateDim('bottomSealHeight', v)} unit={displayUnit} />
+            <DimField label="Bag Depth (filled)" valueMm={localDims.bagDepth} onChangeMm={v => updateDim('bagDepth', v)} unit={displayUnit} />
           </div>
 
           {step === 'confirm-dimensions' && (

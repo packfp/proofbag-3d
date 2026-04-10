@@ -15,9 +15,10 @@ export interface BagDimensions {
 }
 
 export type ProofLayout = 
-  | 'front-only'     // proof shows just the front face
-  | 'front-back'     // proof shows front (left half) + back (right half)
-  | 'full-wrap';     // proof shows all panels: back | gusset | front | gusset (or similar)
+  | 'front-only'           // proof shows just the front face
+  | 'front-back'           // proof shows front (left) + back (right), side by side
+  | 'front-back-stacked'   // proof shows front (top) + back (bottom), stacked vertically
+  | 'full-wrap';           // proof shows all panels: back | gusset | front | gusset (or similar)
 
 export type ClosureType = 
   | 'ponytail-tape'   // neck tape tie / neck tie

@@ -136,7 +136,7 @@ export default function BagViewer({
     if (artworkCanvas) {
       if (textureRef.current) textureRef.current.dispose();
       const tex = new THREE.CanvasTexture(artworkCanvas);
-      tex.flipY = false;
+      tex.flipY = true;
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.needsUpdate = true;
       textureRef.current = tex;
