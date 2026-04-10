@@ -384,11 +384,36 @@ function estimateDimensions(
   const isTallProof = bounds.height > bounds.width * 1.6;
 
   if (isTallProof) {
-    // Front+back stacked vertically — front width equals total width, no gussets
+    // Front+back stacked vertically — each panel is approximately half the proof height.
+    // The ACTUAL bag height is one panel, not the full stacked proof.
     dims.proofLayout = 'front-back-stacked';
     dims.frontWidth = bounds.width;
     dims.leftGussetWidth = 0;
     dims.rightGussetWidth = 0;
+
+    // Single panel height (the real bag height)
+    const panelHeight = Math.round(bounds.height / 2);
+    dims.totalWidth = bounds.width;
+    dims.totalHeight = panelHeight;
+
+    // For ponytail bags (stacked layout), use sensible defaults for seal heights.
+    // Horizontal fold lines inside the panel are usually design elements, not seal lines.
+    // Only use a fold line as a seal boundary if it's in the outermost 20% of the panel.
+    const midY = bounds.height / 2;
+    const frontHorizs = horizs.filter(h => h < midY * 0.85);
+    const topEdgeFolds = frontHorizs.filter(h => h < panelHeight * 0.20);
+    const bottomEdgeFolds = frontHorizs.filter(h => h > panelHeight * 0.80);
+
+    if (topEdgeFolds.length > 0) {
+      dims.topSealHeight = topEdgeFolds[topEdgeFolds.length - 1]; // outermost top fold
+    } else {
+      dims.topSealHeight = Math.round(panelHeight * 0.12);
+    }
+    if (bottomEdgeFolds.length > 0) {
+      dims.bottomSealHeight = panelHeight - bottomEdgeFolds[0]; // outermost bottom fold
+    } else {
+      dims.bottomSealHeight = Math.round(panelHeight * 0.04);
+    }
   } else if (verts.length >= 2) {
     dims.leftGussetWidth = verts[0];
     dims.rightGussetWidth = bounds.width - verts[verts.length - 1];
@@ -403,12 +428,15 @@ function estimateDimensions(
     dims.rightGussetWidth = 0;
   }
 
-  if (horizs.length >= 2) {
-    dims.topSealHeight = horizs[0];
-    dims.bottomSealHeight = bounds.height - horizs[horizs.length - 1];
-  } else {
-    dims.topSealHeight = Math.round(bounds.height * 0.1);
-    dims.bottomSealHeight = Math.round(bounds.height * 0.07);
+  // Seal heights for non-stacked layouts
+  if (!isTallProof) {
+    if (horizs.length >= 2) {
+      dims.topSealHeight = horizs[0];
+      dims.bottomSealHeight = bounds.height - horizs[horizs.length - 1];
+    } else {
+      dims.topSealHeight = Math.round(bounds.height * 0.1);
+      dims.bottomSealHeight = Math.round(bounds.height * 0.07);
+    }
   }
 
   dims.bagDepth = dims.leftGussetWidth

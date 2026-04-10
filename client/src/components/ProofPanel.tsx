@@ -171,15 +171,19 @@ export default function ProofPanel({
         const toMm = (px: number) => Math.round((px / ppm) * 10) / 10;
 
         const estimated = result.estimatedDimensions;
+        // Use estimated totalHeight/totalWidth when available (e.g. stacked layouts
+        // return single-panel height, not the full proof height)
+        const effectiveH = estimated.totalHeight || result.dieLineBounds.height;
+        const effectiveW = estimated.totalWidth || result.dieLineBounds.width;
         const dims: BagDimensions = {
-          totalWidth: toMm(result.dieLineBounds.width),
-          totalHeight: toMm(result.dieLineBounds.height),
-          frontWidth: toMm(estimated.frontWidth || result.dieLineBounds.width),
+          totalWidth: toMm(effectiveW),
+          totalHeight: toMm(effectiveH),
+          frontWidth: toMm(estimated.frontWidth || effectiveW),
           leftGussetWidth: toMm(estimated.leftGussetWidth || 0),
           rightGussetWidth: toMm(estimated.rightGussetWidth || 0),
-          topSealHeight: toMm(estimated.topSealHeight || result.dieLineBounds.height * 0.12),
-          bottomSealHeight: toMm(estimated.bottomSealHeight || result.dieLineBounds.height * 0.08),
-          bagDepth: toMm(estimated.bagDepth || result.dieLineBounds.width * 0.25),
+          topSealHeight: toMm(estimated.topSealHeight || effectiveH * 0.12),
+          bottomSealHeight: toMm(estimated.bottomSealHeight || effectiveH * 0.05),
+          bagDepth: toMm(estimated.bagDepth || effectiveW * 0.25),
           proofLayout: estimated.proofLayout || 'front-only',
         };
 

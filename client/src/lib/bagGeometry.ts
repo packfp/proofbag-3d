@@ -34,7 +34,7 @@ export interface UVRegion {
   vMax: number;
 }
 
-const SEGMENTS = 20; // subdivisions for smooth inflation
+const SEGMENTS = 32; // higher for smoother curves
 
 /**
  * Creates the bag geometry components based on dimensions and fill state.
@@ -57,7 +57,7 @@ export function createBagMeshData(params: BagGeometryParams): BagMeshData {
   const bodyHeight = h - topSeal;
 
   // How much the front/back panels bow outward with fill
-  const bowAmount = depth * 0.35;
+  const bowAmount = depth * 0.4;
 
   // ─── UV regions ───────────────────────────────────────────────────
   const uvRegions = computeUVRegions(d);
@@ -67,7 +67,8 @@ export function createBagMeshData(params: BagGeometryParams): BagMeshData {
     w, bodyHeight, SEGMENTS,
     bowAmount,          // bow outward in +Z
     depth / 2,          // center Z offset
-    uvRegions.front
+    uvRegions.front,
+    fillState
   );
 
   // ─── Back Panel ──────────────────────────────────────────────────
@@ -75,7 +76,8 @@ export function createBagMeshData(params: BagGeometryParams): BagMeshData {
     w, bodyHeight, SEGMENTS,
     bowAmount,          // bow outward in -Z (will be flipped)
     -(depth / 2),       // center Z offset
-    uvRegions.back
+    uvRegions.back,
+    fillState
   );
   // Flip normals for back panel
   flipNormals(backGeometry);
@@ -106,7 +108,9 @@ export function createBagMeshData(params: BagGeometryParams): BagMeshData {
   const neckGeometry = createNeckGeometry(w, depth, topSeal, fillState);
 
   // ─── Tie Band ────────────────────────────────────────────────────
-  const tieGeometry = createTieGeometry(w, depth, bodyHeight + topSeal * 0.7, fillState);
+  // Tie sits around the gathered neck. bandRadius should roughly match the neckRadius.
+  const neckR = Math.max(w * 0.06, 4) * Math.max(0.15, fillState) + 2;
+  const tieGeometry = createTieGeometry(w, neckR, fillState);
 
   // ─── Bottom Seal ─────────────────────────────────────────────────
   const bottomGeometry = createBottomGeometry(w, depth, fillState);
@@ -137,7 +141,6 @@ function computeUVRegions(d: BagDimensions): {
 
   if (d.proofLayout === 'full-wrap') {
     // Layout: [back][leftGusset][front][rightGusset]  (one common layout)
-    // Or:     [leftGusset][front][rightGusset][back]
     const gL = d.leftGussetWidth;
     const gR = d.rightGussetWidth;
     const fw = d.frontWidth;
@@ -177,8 +180,9 @@ function computeUVRegions(d: BagDimensions): {
 }
 
 /**
- * Creates a bowed (slightly inflated) panel geometry.
+ * Creates a bowed (inflated) panel geometry with organic curvature.
  * The panel faces +Z and bows outward by bowAmount at center.
+ * Includes subtle edge taper and fill-dependent shape.
  */
 function createBowedPanel(
   width: number,
@@ -186,7 +190,8 @@ function createBowedPanel(
   segments: number,
   bowAmount: number,
   zOffset: number,
-  uvRegion: UVRegion
+  uvRegion: UVRegion,
+  fillState: number
 ): THREE.BufferGeometry {
   const geo = new THREE.PlaneGeometry(width, height, segments, segments);
   const positions = geo.attributes.position as THREE.BufferAttribute;
@@ -196,19 +201,30 @@ function createBowedPanel(
     const x = positions.getX(i);
     const y = positions.getY(i);
 
-    // Bow effect: sine-based displacement in Z, max at center
-    const nx = (x / (width / 2));  // normalized -1 to 1
-    const ny = (y / (height / 2)); // normalized -1 to 1
-    const bowZ = bowAmount * (1 - nx * nx) * (1 - ny * ny * 0.5);
+    // Normalized coordinates
+    const nx = (x / (width / 2));   // -1 to 1
+    const ny = (y / (height / 2));  // -1 to 1
 
-    positions.setZ(i, zOffset + bowZ);
+    // Organic bow: elliptical cross-section that tapers at edges
+    // Horizontal profile: smooth cosine curve (more rounded than parabolic)
+    const hProfile = Math.cos(nx * Math.PI * 0.5);
+    // Vertical profile: full in the middle, tapers at top (neck) and bottom (seal)
+    const vTaper = smoothstep(ny, -1.0, -0.85) * smoothstep(ny, 1.0, 0.9);
+    // Bottom region tapers more gradually for the seal area
+    const bottomBulge = ny < -0.5 ? 1.0 - ((-0.5 - ny) / 0.5) * 0.3 : 1.0;
+
+    const bowZ = bowAmount * hProfile * vTaper * bottomBulge;
+
+    // Slight inward pinch at the side edges for realistic plastic fold
+    const edgePinch = (1.0 - Math.abs(nx)) < 0.06 ? -bowAmount * 0.08 * fillState : 0;
+
+    positions.setZ(i, zOffset + bowZ + edgePinch);
 
     // Remap UVs to the correct proof region
     const u = uvs.getX(i);
     const v = uvs.getY(i);
     const remappedU = uvRegion.uMin + u * (uvRegion.uMax - uvRegion.uMin);
     // V: proof top = bag top. Three.js UVs have V=0 at bottom, V=1 at top.
-    // Proof images have Y=0 at top. Flip V.
     const remappedV = (1 - v) * (uvRegion.vMax - uvRegion.vMin) + uvRegion.vMin;
     uvs.setXY(i, remappedU, 1 - remappedV);
   }
@@ -217,6 +233,12 @@ function createBowedPanel(
   uvs.needsUpdate = true;
   geo.computeVertexNormals();
   return geo;
+}
+
+/** Smooth step function for organic transitions */
+function smoothstep(x: number, edge0: number, edge1: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
 }
 
 /**
@@ -238,16 +260,12 @@ function createGussetPanel(
     const x = positions.getX(i);
     const y = positions.getY(i);
 
-    // The gusset lies in the XZ plane (perpendicular to front panel)
-    // Rotate 90° so it connects front and back
     const newX = xPosition;
     const newZ = x; // original X becomes Z
     positions.setXYZ(i, newX, y, newZ);
 
-    // Remap UVs to the gusset UV region
-    // For gusset: U goes from 0 at front edge to 1 at back edge
     let u = uvs.getX(i);
-    if (side === 'right') u = 1 - u; // flip for right side
+    if (side === 'right') u = 1 - u;
     const v = uvs.getY(i);
     const remappedU = uvRegion.uMin + u * (uvRegion.uMax - uvRegion.uMin);
     const remappedV = (1 - v) * (uvRegion.vMax - uvRegion.vMin) + uvRegion.vMin;
@@ -258,7 +276,6 @@ function createGussetPanel(
   uvs.needsUpdate = true;
   geo.computeVertexNormals();
 
-  // Flip normals so they face outward (correct side to face the viewer)
   if (side === 'left') {
     flipNormals(geo);
   }
@@ -267,7 +284,9 @@ function createGussetPanel(
 }
 
 /**
- * Creates the neck/ponytail region — tapers from bag width to a narrow neck.
+ * Creates a realistic gathered ponytail neck region.
+ * The neck tapers from the rectangular bag body to a narrow oval/circular gather,
+ * with subtle folds/wrinkles at the transition.
  */
 function createNeckGeometry(
   bagWidth: number,
@@ -275,60 +294,120 @@ function createNeckGeometry(
   neckHeight: number,
   fillState: number
 ): THREE.BufferGeometry {
-  const neckRadius = (bagWidth * 0.08 + depth * 0.05) * Math.max(0.1, fillState);
-  const baseWidth = bagWidth;
-  const baseDepth = depth * fillState;
+  const bodyHalfW = bagWidth / 2;
+  const bodyHalfD = (depth * fillState) / 2;
+  // The gathered neck radius — narrow where the tie cinches
+  const neckRadius = Math.max(bagWidth * 0.06, 4) * Math.max(0.15, fillState) + 2;
 
-  // Create a simple tapered prism for the neck
-  const points: THREE.Vector2[] = [];
-  const neckTop = neckRadius * 1.2;
+  const rows = 16;  // vertical slices
+  const cols = 24;  // around the circumference
 
-  // Profile for lathe won't work for a rectangular bag...
-  // Instead, use a custom geometry that tapers from rectangle to circle
-  const geo = new THREE.CylinderGeometry(
-    neckRadius,
-    Math.max(baseWidth * 0.35, neckRadius),
-    neckHeight,
-    12,
-    1,
-    true
-  );
+  const vertices: number[] = [];
+  const normals: number[] = [];
+  const uvData: number[] = [];
+  const indices: number[] = [];
 
-  // Position at top of bag body
-  const positions = geo.attributes.position as THREE.BufferAttribute;
-  for (let i = 0; i < positions.count; i++) {
-    positions.setY(i, positions.getY(i) + neckHeight / 2);
+  for (let row = 0; row <= rows; row++) {
+    const t = row / rows; // 0 = bottom (bag body), 1 = top (gathered tip)
+
+    // Taper profile: starts rectangular, transitions to oval/circle
+    // Use a smooth blend with most of the tapering in the lower 40%
+    const blendT = smoothstep(t, 0.0, 0.45);
+    // At t=0: full rectangular cross-section
+    // At t=1: circular/oval cross-section at neckRadius
+
+    for (let col = 0; col <= cols; col++) {
+      const angle = (col / cols) * Math.PI * 2;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+
+      // Rectangular cross-section (superellipse with n → ∞)
+      // Approximate with a rounded rectangle using a superellipse
+      const rectN = 3.0; // roundedness of rectangle corners (higher = sharper)
+      const rectPower = 2.0 / rectN;
+      const absCos = Math.pow(Math.abs(cosA), rectPower);
+      const absSin = Math.pow(Math.abs(sinA), rectPower);
+      const rectR = 1.0 / Math.pow(absCos + absSin, 1.0 / rectPower);
+
+      // Rectangular extents at the base
+      const baseRx = bodyHalfW * rectR * Math.abs(cosA) / Math.max(Math.abs(cosA), 0.001) || bodyHalfW;
+      const baseRz = bodyHalfD * rectR * Math.abs(sinA) / Math.max(Math.abs(sinA), 0.001) || bodyHalfD;
+
+      // Simpler approach: interpolate between rectangle and circle
+      // Rectangle point
+      const rectX = bodyHalfW * Math.sign(cosA) * Math.min(1, Math.abs(cosA) * 2.5);
+      const rectZ = Math.max(bodyHalfD, 1.5) * Math.sign(sinA) * Math.min(1, Math.abs(sinA) * 2.5);
+      // Actually use cos/sin for smooth blending:
+      const rectXSmooth = bodyHalfW * cosA / Math.max(Math.abs(cosA), Math.abs(sinA));
+      const rectZSmooth = Math.max(bodyHalfD, 1.5) * sinA / Math.max(Math.abs(cosA), Math.abs(sinA));
+
+      // Circle point (gathered)
+      const circX = neckRadius * cosA;
+      const circZ = neckRadius * sinA;
+
+      // Blend between rectangle and circle
+      const x = rectXSmooth * (1 - blendT) + circX * blendT;
+      const z = rectZSmooth * (1 - blendT) + circZ * blendT;
+
+      // Subtle wrinkle/fold pattern in the transition zone
+      const wrinkleFreq = 8;
+      const wrinklePhase = angle * wrinkleFreq;
+      const wrinkleAmount = Math.sin(wrinklePhase) * 0.06 * bagWidth * blendT * (1 - blendT) * 4;
+      const wrinkledX = x + wrinkleAmount * cosA * 0.3;
+      const wrinkledZ = z + wrinkleAmount * sinA * 0.3;
+
+      // Height
+      const y = t * neckHeight;
+
+      vertices.push(wrinkledX, y, wrinkledZ);
+      // Approximate normal
+      normals.push(cosA, 0, sinA);
+      uvData.push(col / cols, t);
+    }
   }
-  positions.needsUpdate = true;
 
-  // Neck UVs don't map to the artwork — they'll use a transparent/bag material
+  // Build triangle indices
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const a = row * (cols + 1) + col;
+      const b = a + 1;
+      const c = a + (cols + 1);
+      const dd = c + 1;
+
+      indices.push(a, c, b);
+      indices.push(b, c, dd);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvData, 2));
+  geo.setIndex(indices);
   geo.computeVertexNormals();
+
   return geo;
 }
 
 /**
- * Creates a small cylinder geometry for the twist-tie / neck tape.
+ * Creates a torus ring for the twist-tie / neck tape.
+ * Geometry centered at origin — positioning done by the caller.
  */
 function createTieGeometry(
   bagWidth: number,
-  depth: number,
-  yPosition: number,
+  neckRadius: number,
   fillState: number
 ): THREE.BufferGeometry {
-  const tieRadius = bagWidth * 0.04 * Math.max(0.3, fillState) + 1;
-  const geo = new THREE.TorusGeometry(
-    Math.max(bagWidth * 0.08, 3),
-    tieRadius,
-    8,
-    20
-  );
+  const tubeRadius = Math.max(bagWidth * 0.015, 1.5) * Math.max(0.3, fillState) + 0.8;
+  const bandRadius = Math.max(neckRadius * 1.15, 5); // slightly larger than neck
 
-  // Position the tie at neck height
-  const positions = geo.attributes.position as THREE.BufferAttribute;
-  for (let i = 0; i < positions.count; i++) {
-    positions.setY(i, positions.getY(i) + yPosition);
-  }
-  positions.needsUpdate = true;
+  const geo = new THREE.TorusGeometry(
+    bandRadius,
+    tubeRadius,
+    12,
+    32
+  );
+  // No position offset — kept at origin, positioned via mesh.position
   return geo;
 }
 
