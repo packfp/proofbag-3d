@@ -1,9 +1,10 @@
 // PDF Processor — renders PDF proof to a high-res canvas using pdf.js
 
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// Use CDN worker to avoid worker bundle issues
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+// Use Vite ?url import so the worker is bundled as a static asset
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export interface RenderResult {
   canvas: HTMLCanvasElement;
